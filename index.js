@@ -55,12 +55,47 @@ async function resolveUsernameToId(username) {
   }
 }
 
+let fbDtsgToken = '';
+
+async function fetchFbDtsgToken() {
+  if (fbDtsgToken) return fbDtsgToken;
+
+  const homeUrl = 'https://www.threads.com/';
+
+  try {
+    const response = await axios.get(homeUrl, {
+      headers: getHeaders(homeUrl)
+    });
+
+    const html = response.data;
+    const match = html.match(/"DTSGInitData"\s*,\s*\[\s*\]\s*,\s*\{\s*"token"\s*:\s*"([^"]+)"/);
+    if (match) {
+      fbDtsgToken = match[1];
+
+      return fbDtsgToken;
+    };
+
+    const match2 = html.match(/"token"\s*:\s*"([^"]+)"/);
+    if (match2) {
+      fbDtsgToken = match2[1];
+
+      return fbDtsgToken;
+    };
+  } catch (error) {
+    console.error('fb_dtsg tokeni alınırken hata oluştu:', error.message);
+  }
+
+  return null;
+}
+
 async function fetchProfileStats(userId) {
   const url = 'https://www.threads.com/api/graphql';
   const headers = getHeaders();
 
+  const dtsg = await fetchFbDtsgToken();
+
   const formData = new URLSearchParams();
-  formData.append('av', '17841418597585302');
+  formData.append('av', config.ds_user_id || '0');
   formData.append('__user', '0');
   formData.append('__a', '1');
   formData.append('__req', '1');
@@ -69,9 +104,9 @@ async function fetchProfileStats(userId) {
   formData.append('__ccg', 'EXCELLENT');
   formData.append('__rev', '1041856931');
   formData.append('__comet_req', '29');
-  formData.append('fb_dtsg', 'NAfw8KIvs4Z4U4r3q3CogWDRNKJBRuyalFAL-PL3XnroXz96DfWulwA:17864863018060157:1782073257');
+  formData.append('fb_dtsg', dtsg || '');
   formData.append('jazoest', '26195');
-  formData.append('lsd', 'gyrvbMb8iYHSHRnFRFlFC_');
+  formData.append('lsd', config.lsd || 'gyrvbMb8iYHSHRnFRFlFC_');
   formData.append('fb_api_caller_class', 'RelayModern');
   formData.append('fb_api_req_friendly_name', 'BarcelonaFriendshipsDialogUserQuery');
   formData.append('variables', JSON.stringify({
@@ -165,7 +200,7 @@ async function main() {
   const targetUsername = await askQuestion('\nAnaliz edilecek kullanıcı adını gir (kendin için direkt Enter\'a bas): ');
 
   let targetId = viewerUserId;
-  let targetName = viewerUsername;
+  let targetName = viewerUsername || viewerUserId;
 
   if (targetUsername.trim()) {
     targetName = targetUsername.trim();
@@ -178,20 +213,16 @@ async function main() {
     process.exit(1);
   };
 
-  console.log(`Seçilen Kullanıcı: @${targetName}`);
-
   const stats = await fetchProfileStats(targetId);
   if (!stats) {
-    console.error('Kullanıcı profili detayları alınamadı! Hesap gizli veya geçersiz olabilir.');
-
-    process.exit(1);
+    console.warn('\nUyarı: Kullanıcı profili detayları (takipçi sayıları) alınamadı. İşleme listeleri çekerek devam ediliyor...');
+  } else {
+    console.log('\n--- Seçilen Kullanıcı Özeti ---');
+    console.log(`Kullanıcı Adı: @${stats.user.username}`);
+    console.log(`Takipçi Sayısı: ${stats.counts.total_followers_count}`);
+    console.log(`Takip Edilen Sayısı: ${stats.counts.total_following_count}`);
+    console.log('-------------------------------');
   };
-
-  console.log('\n--- Profil Özeti ---');
-  console.log(`Kullanıcı Adı: @${stats.user.username}`);
-  console.log(`Takipçi Sayısı: ${stats.counts.total_followers_count}`);
-  console.log(`Takip Edilen Sayısı: ${stats.counts.total_following_count}`);
-  console.log('-----------------------');
 
   const proceed = await askQuestion('\nTakip listelerini çekip geri takip etmeyenleri bulmak istiyor musun? (e/h): ');
   if (proceed.toLowerCase() !== 'e' && proceed.toLowerCase() !== 'y') {

@@ -15,6 +15,9 @@ if (!cookie) {
 const csrfMatch = cookie.match(/csrftoken=([^;]+)/);
 const csrftoken = csrfMatch ? csrfMatch[1] : '';
 
+const userIdMatch = cookie ? cookie.match(/ds_user_id=([^;]+)/) : null;
+const ds_user_id = userIdMatch ? userIdMatch[1] : '';
+
 export function getHeaders(customReferer = 'https://www.threads.com/') {
   return {
     'accept': '*/*',
@@ -42,5 +45,6 @@ export const config = {
   userAgent,
   appId,
   lsd,
-  csrftoken
+  csrftoken,
+  ds_user_id
 };
