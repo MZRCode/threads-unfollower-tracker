@@ -181,6 +181,25 @@ async function fetchFullRelationshipList(userId, type) {
   return list;
 }
 
+async function unfollowUser(userId) {
+  const url = `https://www.threads.com/api/v1/friendships/destroy/${userId}/`;
+  const headers = getHeaders(url);
+
+  try {
+    const response = await axios.post(url, undefined, { headers });
+
+    if (response.data && response.data.friendship_status) return true;
+    if (response.data && (response.data.status === 'ok' || response.data.success === true)) return true;
+
+    return false;
+  } catch (error) {
+    console.error(`"${userId}" ID'li kullanıcı takipten çıkarılırken hata oluştu:`, error.message);
+
+    if (error.response && error.response.data) console.error('Hata detayı:', error.response.data);
+    return false;
+  }
+}
+
 async function main() {
   console.log('=========================================');
   console.log('    Threads GT\'den Çıkanı Bulma Aracı ');
@@ -245,7 +264,15 @@ async function main() {
   console.log(`   Çekilen Takip Edilen: ${followingList.length}`);
 
   const followerIds = new Set(followersList.map(u => u.id));
-  const unfollowers = followingList.filter(u => !followerIds.has(u.id));
+  const seenUnfollowerIds = new Set();
+  const unfollowers = followingList
+    .filter(u => !followerIds.has(u.id))
+    .filter(u => {
+      if (seenUnfollowerIds.has(u.id)) return false;
+      seenUnfollowerIds.add(u.id);
+
+      return true;
+    });
 
   console.log(`\n=========================================`);
   console.log(`GT\'den Çıkan Kişi Sayısı: ${unfollowers.length}`);
@@ -281,6 +308,29 @@ async function main() {
 
     fs.writeFileSync('unfollowers.json', JSON.stringify(exportData, null, 2));
     console.log('\nDetaylı liste "unfollowers.json" dosyasına kaydedildi.');
+
+    const unfollowConfirm = await askQuestion('Bu kişileri takipten çıkarmak istiyor musun? (e/h): ');
+    if (unfollowConfirm.toLowerCase() === 'e' || unfollowConfirm.toLowerCase() === 'y') {
+      console.log('\nTakipten çıkarma işlemi başlatılıyor...');
+
+      for (let i = 0; i < unfollowers.length; i++) {
+        const u = unfollowers[i];
+
+        console.log(`[${i + 1}/${unfollowers.length}] @${u.username} (${u.full_name || 'Yok'}) takipten çıkarılıyor...`);
+
+        const success = await unfollowUser(u.id);
+        if (success) console.log(`@${u.username} başarıyla takipten çıkarıldı.`);
+        else console.log(`@${u.username} takipten çıkarılamadı! (Hata veya limit oluşmuş olabilir)`);
+
+        if (i < unfollowers.length - 1) {
+          console.log('Bir sonraki işlem için 3 saniye bekleniyor...');
+
+          await sleep(3000);
+        };
+      }
+
+      console.log('\nTakipten çıkarma işlemi tamamlandı.');
+    };
   } else {
     console.log('Garip şekilde inanılmaz! Takip ettiğiniz herkes sizi geri takip ediyor.');
   };
